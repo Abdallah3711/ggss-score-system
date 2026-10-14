@@ -1,0 +1,199 @@
+:root {
+    --school-color-scheme: light;
+    --school-page: #e5eee8;
+    --school-page-gradient: linear-gradient(135deg, #e5f0e9, #f2eadb 48%, #e2edef);
+    --school-text: #183b36;
+    --school-heading: #174b3e;
+    --school-muted: #526d64;
+    --school-sidebar-text: #21483e;
+    --school-sidebar-panel: rgba(235, 245, 239, 0.9);
+    --school-sidebar-border: rgba(31, 91, 76, 0.16);
+    --school-button-start: #137c68;
+    --school-button-end: #d59635;
+    --school-button-hover-start: #0e6655;
+    --school-button-hover-end: #bd7920;
+    --school-input: #f0f6f2;
+    --school-input-border: #c6d8d1;
+    --school-form: linear-gradient(140deg, rgba(232, 244, 237, 0.96), rgba(250, 239, 218, 0.94));
+    --school-form-border: rgba(31, 91, 76, 0.14);
+    --school-alert: rgba(235, 245, 239, 0.92);
+    --school-table: rgba(233, 243, 237, 0.94);
+    --school-table-border: #bdd7ca;
+    color-scheme: var(--school-color-scheme, light);
+}
+
+html,
+body,
+[data-testid="stAppViewContainer"] {
+    color: var(--school-text) !important;
+    background-color: var(--school-page);
+    background-image: var(--school-page-gradient);
+    background-attachment: fixed;
+}
+
+header[data-testid="stHeader"] {
+    background-color: transparent !important;
+}
+
+.stApp {
+    color: var(--school-text) !important;
+    background-color: transparent;
+    background-image: var(--school-login-watermark, none);
+    background-position: center, center center, center;
+    background-repeat: no-repeat;
+    background-size: cover, min(58vw, 680px) auto, cover;
+    background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4 {
+    color: var(--school-heading) !important;
+    letter-spacing: -0.025em;
+}
+
+[data-testid="stMarkdownContainer"],
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stCaptionContainer"],
+[data-testid="stWidgetLabel"],
+[data-testid="stWidgetLabel"] p,
+[data-testid="stCheckbox"] label,
+[data-testid="stRadio"] label,
+[data-testid="stFileUploader"] label,
+[data-testid="stSelectbox"] label,
+[data-testid="stTextInput"] label,
+[data-testid="stNumberInput"] label {
+    color: var(--school-text) !important;
+}
+
+[data-testid="stCaptionContainer"] {
+    color: var(--school-muted) !important;
+}
+
+section[data-testid="stSidebar"] {
+    border-right: 1px solid var(--school-sidebar-border);
+}
+
+section[data-testid="stSidebar"] > div:first-child {
+    background-image: var(--school-sidebar-watermark, none);
+    background-position: center, center center, center;
+    background-repeat: no-repeat;
+    background-size: cover, 88% auto, cover;
+}
+
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stRadio"] label p {
+    color: var(--school-sidebar-text) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] {
+    background: var(--school-sidebar-panel);
+    border: 1px solid var(--school-sidebar-border);
+    border-radius: 14px;
+    padding: 0.65rem 0.8rem;
+}
+
+.stButton > button,
+.stFormSubmitButton > button {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, var(--school-button-start), var(--school-button-end));
+    border: 0;
+    border-radius: 10px;
+    font-weight: 650;
+    box-shadow: 0 4px 12px rgba(23, 107, 87, 0.2);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.stButton > button:hover,
+.stFormSubmitButton > button:hover {
+    color: #ffffff !important;
+    border: 0;
+    background: linear-gradient(135deg, var(--school-button-hover-start), var(--school-button-hover-end));
+    transform: translateY(-1px);
+    box-shadow: 0 7px 16px rgba(23, 107, 87, 0.24);
+}
+
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    color: var(--school-text) !important;
+    background-color: var(--school-input) !important;
+    border-radius: 9px;
+    border-color: var(--school-input-border);
+}
+
+[data-testid="stTextInput"] button,
+[data-testid="stNumberInput"] button {
+    color: var(--school-text) !important;
+    background-color: var(--school-input) !important;
+    border-color: var(--school-input-border) !important;
+}
+
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stNumberInput"] input::placeholder {
+    color: var(--school-muted) !important;
+    opacity: 1;
+}
+
+[data-baseweb="popover"],
+[data-baseweb="menu"],
+[role="listbox"],
+[role="option"] {
+    color: var(--school-text) !important;
+    background-color: var(--school-input) !important;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] *,
+[data-testid="stMultiSelect"] [data-baseweb="select"] * {
+    color: var(--school-text);
+}
+
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus {
+    border-color: var(--school-button-start);
+    box-shadow: 0 0 0 1px var(--school-button-start);
+}
+
+[data-testid="stForm"] {
+    background: var(--school-form);
+    border: 1px solid var(--school-form-border);
+    border-radius: 18px;
+    padding: 1.35rem 1.5rem 1rem;
+    box-shadow: 0 16px 42px rgba(28, 63, 55, 0.12);
+    backdrop-filter: blur(8px);
+}
+
+[data-testid="stAlert"] {
+    border-radius: 12px;
+    background-color: var(--school-alert);
+}
+
+[data-testid="stExpander"],
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    background-color: var(--school-sidebar-panel);
+    border-color: var(--school-sidebar-border);
+}
+
+[data-testid="stTabs"] button[role="tab"] {
+    color: var(--school-text);
+}
+
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    color: var(--school-heading);
+    border-bottom-color: var(--school-button-start);
+}
+
+[data-testid="stDataFrame"],
+[data-testid="stDataEditor"] {
+    border: 1px solid var(--school-table-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--school-table);
+}
+
+@media (max-width: 640px) {
+    .stApp {
+        background-size: cover, 82vw auto, cover;
+    }
+}
