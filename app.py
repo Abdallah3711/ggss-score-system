@@ -162,34 +162,40 @@ def check_pw(password, stored):
     return secrets.compare_digest(hash_pw(password, salt).split("$")[1], digest)
 
 
+DATABASE_SCHEMA = (
+    """CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('admin','teacher')),
+        password_hash TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS students (
+        student_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        class_name TEXT NOT NULL,
+        gender TEXT,
+        guardian_phone TEXT,
+        registered_on TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS assignments (
+        username TEXT NOT NULL,
+        class_name TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        PRIMARY KEY (username, class_name, subject))""",
+    """CREATE TABLE IF NOT EXISTS scores (
+        student_id TEXT NOT NULL,
+        session TEXT NOT NULL,
+        term TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        assessment TEXT NOT NULL,
+        score DOUBLE PRECISION NOT NULL,
+        entered_by TEXT,
+        updated_on TEXT,
+        PRIMARY KEY (student_id, session, term, subject, assessment))""",
+)
+
+
 def init_db():
-    run("""CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            full_name TEXT NOT NULL,
-            role TEXT NOT NULL CHECK (role IN ('admin','teacher')),
-            password_hash TEXT NOT NULL)""")
-    run("""CREATE TABLE IF NOT EXISTS students (
-            student_id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            class_name TEXT NOT NULL,
-            gender TEXT,
-            guardian_phone TEXT,
-            registered_on TEXT NOT NULL)""")
-    run("""CREATE TABLE IF NOT EXISTS assignments (
-            username TEXT NOT NULL,
-            class_name TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            PRIMARY KEY (username, class_name, subject))""")
-    run("""CREATE TABLE IF NOT EXISTS scores (
-            student_id TEXT NOT NULL,
-            session TEXT NOT NULL,
-            term TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            assessment TEXT NOT NULL,
-            score DOUBLE PRECISION NOT NULL,
-            entered_by TEXT,
-            updated_on TEXT,
-            PRIMARY KEY (student_id, session, term, subject, assessment))""")
+    for statement in DATABASE_SCHEMA:
+        run(statement)
 
     if not run("SELECT 1 FROM users WHERE role='admin'"):
         try:
@@ -198,6 +204,49 @@ def init_db():
             default_pw = "admin123"
         run("INSERT INTO users VALUES (?,?,?,?)",
             ("admin", "Administrator", "admin", hash_pw(default_pw)))
+
+
+def create_full_backup():
+    """Return an Excel backup workbook containing the app's school data."""
+    sheets = (
+        ("Students", read_df("""SELECT student_id AS "Student ID", name AS "Name",
+                                      class_name AS "Class", gender AS "Gender",
+                                      guardian_phone AS "Guardian Phone",
+                                      registered_on AS "Registered On"
+                               FROM students ORDER BY class_name, name""")),
+        ("Scores", read_df("""SELECT sc.student_id AS "Student ID",
+                                    s.name AS "Student Name",
+                                    s.class_name AS "Class",
+                                    sc.session AS "Session", sc.term AS "Term",
+                                    sc.subject AS "Subject",
+                                    sc.assessment AS "Assessment",
+                                    sc.score AS "Score",
+                                    sc.entered_by AS "Entered By",
+                                    sc.updated_on AS "Updated On"
+                             FROM scores sc
+                             LEFT JOIN students s ON s.student_id=sc.student_id
+                             ORDER BY s.class_name, s.name, sc.session,
+                                      sc.term, sc.subject, sc.assessment""")),
+        ("Teachers and Admins", read_df("""SELECT username AS "Username",
+                                                  full_name AS "Full Name",
+                                                  role AS "Role"
+                                           FROM users
+                                           WHERE role IN ('teacher', 'admin')
+                                           ORDER BY role, full_name""")),
+        ("Assignments", read_df("""SELECT u.full_name AS "Teacher",
+                                          a.username AS "Username",
+                                          a.class_name AS "Class",
+                                          a.subject AS "Subject"
+                                   FROM assignments a
+                                   JOIN users u ON u.username=a.username
+                                   WHERE u.role='teacher'
+                                   ORDER BY u.full_name, a.class_name, a.subject""")),
+    )
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        for sheet_name, dataframe in sheets:
+            dataframe.to_excel(writer, index=False, sheet_name=sheet_name)
+    return buffer.getvalue()
 
 
 @st.cache_resource(show_spinner=False)
@@ -1173,6 +1222,13 @@ def main():
                                      "Teachers & Assignments",
                                      "Results & Reports", "Report Sheets",
                                      "Change Password"])
+            st.download_button(
+                "Download full backup",
+                data=create_full_backup,
+                file_name=f"ggss_scores_backup_{datetime.now():%Y%m%d-%H%M%S}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help="Download students, scores, accounts, and teacher assignments.",
+            )
         else:
             page = st.radio("Menu", ["Enter Scores", "Change Password"])
         if st.button("Log out"):
