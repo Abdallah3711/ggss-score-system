@@ -274,36 +274,88 @@ def register_student(name, class_name, gender="", phone=""):
 
 
 def transfer_student(student_id, target_class):
+    return transfer_students([student_id], target_class)
+
+
+def transfer_students(student_ids, target_class, expected_source_class=None):
     if target_class not in CLASSES:
         raise ValueError("Please select a valid destination class.")
 
-    students = run("SELECT name, class_name FROM students WHERE student_id=?",
-                   (student_id,))
-    if not students:
-        raise ValueError("The selected student could not be found.")
+    student_ids = list(dict.fromkeys(student_ids))
+    if not student_ids:
+        raise ValueError("Select at least one student to transfer.")
 
-    student = students[0]
-    source_class = student["class_name"]
+    placeholders = ",".join("?" for _ in student_ids)
+    students = read_df(
+        f"SELECT student_id, name, class_name FROM students "
+        f"WHERE student_id IN ({placeholders})",
+        tuple(student_ids),
+    )
+    if len(students) != len(student_ids):
+        raise ValueError("One or more selected students could not be found.")
+
+    source_classes = students["class_name"].unique().tolist()
+    if len(source_classes) != 1:
+        raise ValueError("Select students from the same current class.")
+    source_class = source_classes[0]
+    if expected_source_class and source_class != expected_source_class:
+        raise ValueError(
+            "One or more selected students are no longer in the selected class."
+        )
     if source_class == target_class:
-        raise ValueError("The student is already in that class.")
+        raise ValueError("The selected students are already in that class.")
 
     classmates = read_df(
         "SELECT student_id, name FROM students WHERE class_name=?",
-        (target_class,))
-    duplicates = classmates[
-        classmates["name"].map(normalized_student_name)
-        == normalized_student_name(student["name"])
-    ]
-    if not duplicates.empty:
-        ids = ", ".join(duplicates["student_id"])
+        (target_class,),
+    )
+    target_ids_by_name = {}
+    for _, student in classmates.iterrows():
+        key = normalized_student_name(student["name"])
+        target_ids_by_name.setdefault(key, []).append(student["student_id"])
+
+    selected_by_name = {}
+    for _, student in students.iterrows():
+        key = normalized_student_name(student["name"])
+        selected_by_name.setdefault(key, []).append(student)
+
+    conflicts = []
+    for key, selected in selected_by_name.items():
+        target_ids = target_ids_by_name.get(key, [])
+        if target_ids or len(selected) > 1:
+            ids = target_ids + [student["student_id"] for student in selected]
+            conflicts.append(
+                f"{selected[0]['name']} (Student IDs: {', '.join(ids)})"
+            )
+    if conflicts:
         raise ValueError(
-            f"A student with this name is already registered in "
-            f"{target_class} (Student ID: {ids})."
+            f"Cannot transfer because matching names already exist in "
+            f"{target_class}: {'; '.join(conflicts)}."
         )
 
-    run("UPDATE students SET class_name=? WHERE student_id=?",
-        (target_class, student_id))
+    run(
+        f"UPDATE students SET class_name=? WHERE student_id IN ({placeholders})",
+        (target_class, *student_ids),
+    )
     return source_class
+
+
+def delete_students(student_ids):
+    student_ids = list(dict.fromkeys(student_ids))
+    if not student_ids:
+        raise ValueError("Select at least one student to delete.")
+
+    placeholders = ",".join("?" for _ in student_ids)
+    existing = run(
+        f"SELECT student_id FROM students WHERE student_id IN ({placeholders})",
+        tuple(student_ids),
+    )
+    if len(existing) != len(student_ids):
+        raise ValueError("One or more selected students could not be found.")
+
+    params = tuple(student_ids)
+    run(f"DELETE FROM scores WHERE student_id IN ({placeholders})", params)
+    run(f"DELETE FROM students WHERE student_id IN ({placeholders})", params)
 
 
 def normalized_student_name(name):
@@ -723,6 +775,37 @@ def admin_manage_students():
                    "confirm deletion. Its scores will also be deleted.")
     st.download_button("Download list (Excel)", to_excel(df), "students.xlsx")
 
+    st.subheader("Delete multiple students")
+    student_by_id = df.set_index("student_id")["name"].to_dict()
+    students_to_delete = st.multiselect(
+        "Select students to delete",
+        list(student_by_id),
+        format_func=lambda student_id: (
+            f"{student_id} - {student_by_id[student_id]}"
+        ),
+        key="students_to_delete",
+    )
+    st.caption("Deleting students also permanently deletes their saved scores.")
+    confirm_bulk_delete = st.checkbox(
+        "I confirm deletion of all selected students",
+        key="confirm_bulk_student_delete",
+    )
+    if st.button("Delete selected students", type="secondary"):
+        if not students_to_delete:
+            st.error("Select at least one student to delete.")
+        elif not confirm_bulk_delete:
+            st.error("Please confirm deletion before continuing.")
+        else:
+            try:
+                delete_students(students_to_delete)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.success(
+                    f"Deleted {len(students_to_delete)} student(s) and their scores."
+                )
+                st.rerun()
+
     st.subheader("Edit a student")
     pick = st.selectbox("Student", df["student_id"] + " - " + df["name"])
     sid = pick.split(" - ")[0]
@@ -745,8 +828,8 @@ def admin_manage_students():
 
 
 def admin_transfer_student():
-    st.header("Transfer Student")
-    st.caption("Move a student to another class without creating a new record.")
+    st.header("Transfer Students")
+    st.caption("Move one or more students to another class without creating new records.")
 
     if "transfer_success" in st.session_state:
         st.success(st.session_state.pop("transfer_success"))
@@ -760,11 +843,13 @@ def admin_transfer_student():
         return
 
     student_by_id = students.set_index("student_id")["name"].to_dict()
-    student_id = st.selectbox(
-        "Student",
+    student_ids = st.multiselect(
+        "Students to transfer",
         list(student_by_id),
-        format_func=lambda sid: f"{sid} - {student_by_id[sid]}",
-        key="transfer_student",
+        format_func=lambda student_id: (
+            f"{student_id} - {student_by_id[student_id]}"
+        ),
+        key="transfer_students",
     )
     target_classes = [cls for cls in CLASSES if cls != source_class]
     target_class = st.selectbox(
@@ -772,23 +857,28 @@ def admin_transfer_student():
     st.info("The student's ID and saved scores will remain unchanged.")
 
     confirmed = st.checkbox(
-        "I confirm that I want to transfer this student",
+        "I confirm that I want to transfer all selected students",
         key="confirm_student_transfer",
     )
-    if st.button("Transfer student", type="primary"):
+    if st.button("Transfer selected students", type="primary"):
+        if not student_ids:
+            st.error("Select at least one student to transfer.")
+            return
         if not confirmed:
             st.error("Please confirm the transfer before continuing.")
             return
         try:
-            previous_class = transfer_student(student_id, target_class)
+            previous_class = transfer_students(
+                student_ids, target_class, expected_source_class=source_class
+            )
         except ValueError as exc:
             st.error(str(exc))
             return
 
         st.session_state["transfer_success"] = (
-            f"Transferred {student_by_id[student_id]} "
-            f"({student_id}) from {previous_class} to {target_class}. "
-            "The student record and scores were retained."
+            f"Transferred {len(student_ids)} student(s) from "
+            f"{previous_class} to {target_class}. Their records and scores "
+            "were retained."
         )
         st.rerun()
 
@@ -1218,7 +1308,7 @@ def main():
         st.radio("Appearance", ["Colour", "White", "Dark"], key="appearance")
         if user["role"] == "admin":
             page = st.radio("Menu", ["Register Student", "Manage Students",
-                                     "Transfer Student",
+                                     "Transfer Students",
                                      "Teachers & Assignments",
                                      "Results & Reports", "Report Sheets",
                                      "Change Password"])
@@ -1239,7 +1329,7 @@ def main():
         admin_register_student()
     elif page == "Manage Students":
         admin_manage_students()
-    elif page == "Transfer Student":
+    elif page == "Transfer Students":
         admin_transfer_student()
     elif page == "Teachers & Assignments":
         admin_teachers()
